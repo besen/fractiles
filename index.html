@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+		<meta content="utf-8" http-equiv="encoding">
+		<title>Fractiles</title>
+		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+			integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+			crossorigin=""/>
+			<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+			integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+			crossorigin=""></script>
+			<script src="js/color.js"></script>
+			<script src="js/webgl-boilerplate.js"></script>
+			<script src="js/fractiles.js"></script>
+			<link rel="stylesheet" href="css/fractiles.css">
+		</head>
+		<body>
+			<div class="container">
+				<div class="c right">
+					<div id="mapid" style="width: 100%; height: 100%; min-height: 600px;"></div>
+				</div>
+				<div class="left">
+					<div>
+						<div class="color-control">
+							<div style="display: flex; justify-content: space-between; flex-direction: column;">
+								<div class='form-control'><label>C1: <input type="color" id="c1" value='#333333' autocomplete="off"/></label></div>
+								<div class='form-control'><label>C2: <input type="color" id="c2" value='#DD0000' autocomplete="off"/></label></div>
+								<div class='form-control'><label>C3: <input type="color" id="c3" value='#FFFF00' autocomplete="off"/></label></div>
+								<div class='form-control'><label>C4: <input type="color" id="c4" value='#DD0000' autocomplete="off"/></label></div>
+								<div class='form-control'><label>C5: <input type="color" id="c5" value='#333333' autocomplete="off"/></label></div>
+							</div>
+							<div class='form-control'>
+								<canvas id="texture-view" width="20" height="256"></canvas>
+							</div>
+						</div>
+						<div class="form-control">
+								<label>
+					        <input type="number" id="max-iterations" value="200" />
+									max iterations
+								</label>
+						</div>
+						<div class="form-control">
+							<label>
+								<input type="checkbox" id="use-julia-coords"/>
+								Julia Set
+							</label>
+							<input type="text" id="julia-re" value="-0.7269"> + <input type="text" id="julia-im" value="0.1889"/><i> i</i>
+						</div>
+					</div>
+				</div>
+			</div>
+			<script type="text/javascript">
+				/******************
+				 * Setup Controls *	
+				 ******************/
+				const el_c1 = document.getElementById('c1');
+				const el_c2 = document.getElementById('c2');
+				const el_c3 = document.getElementById('c3');
+				const el_c4 = document.getElementById('c4');
+				const el_c5 = document.getElementById('c5');
+				const el_textureView = document.getElementById('texture-view');
+				const el_maxIterations = document.getElementById('max-iterations');
+				const el_useJuliaCoords = document.getElementById('use-julia-coords');
+				const el_juliaRe = document.getElementById('julia-re');
+				const el_juliaIm = document.getElementById('julia-im');
+
+				const colorGradient = new ColorGradient([
+							Color.fromHex(el_c1.value),
+							Color.fromHex(el_c2.value),
+							Color.fromHex(el_c3.value),
+							Color.fromHex(el_c4.value),
+							Color.fromHex(el_c5.value)
+						], el_textureView);
+				let maxIterations = el_maxIterations.value;
+				let useJuliaCoords = el_useJuliaCoords.checked;
+				let juliaRe = el_juliaRe.value;
+				let juliaIm = el_juliaIm.value;
+
+
+				const reloadParameters = function () {
+					colorGradient.updateColors([
+							Color.fromHex(el_c1.value),
+							Color.fromHex(el_c2.value),
+							Color.fromHex(el_c3.value),
+							Color.fromHex(el_c4.value),
+							Color.fromHex(el_c5.value)
+						]
+					);
+					maxIterations = el_maxIterations.value;
+					useJuliaCoords = el_useJuliaCoords.checked;
+					juliaRe = el_juliaRe.value;
+					juliaIm = el_juliaIm.value;
+
+					fractalLayer.redraw();
+				}
+
+				const elements = [
+					el_c1, el_c2, el_c3, el_c4, el_c5, el_maxIterations, el_useJuliaCoords, el_juliaRe, el_juliaIm
+				]; 
+
+				elements.forEach((element) => element.addEventListener('change', reloadParameters));
+
+
+				/*************
+				 * Setup Map *	
+				 *************/
+				var FractalLayer = L.GridLayer.extend({
+					createTile: function(coords){
+						// create a <canvas> element for drawing
+						var tile = L.DomUtil.create('canvas', 'leaflet-tile');
+		        var size = this.getTileSize();
+        		tile.width = size.x;
+      			tile.height = size.y;
+						// Draw on the tile with the given parameters
+						drawTile(tile, coords, colorGradient, maxIterations, useJuliaCoords, juliaRe, juliaIm);
+						return tile;
+					}
+				});
+
+				var DebugLayer = L.GridLayer.extend({
+					createTile: function(coords){
+						const tile = L.DomUtil.create('div', 'debug');
+						let zoomFactor = 2 ** coords.z;
+						let scaledTileSize = 2 / zoomFactor;
+						let el_tileInfo = L.DomUtil.create('div');
+						let el_coordsInfo = L.DomUtil.create('div');
+						el_tileInfo.textContent = `x: ${coords.x} | y: ${coords.y} | z: ${coords.z}`
+						el_coordsInfo.textContent = `${coords.x * scaledTileSize} + ${coords.y * scaledTileSize}i`
+						tile.appendChild(el_tileInfo);
+						tile.appendChild(el_coordsInfo);
+						return tile;
+					}
+				});
+
+				const fractalLayer = new FractalLayer({ tileSize: 512 });
+				const debugLayer = new DebugLayer();
+				const map = L.map('mapid', {
+					crs: L.CRS.Simple,
+					layers: fractalLayer
+				}).setView([0, 0], 0);
+				
+				L.control.layers({}, {"Debug Coords": debugLayer}).addTo(map);
+			</script>
+		</body>
+	</html>
